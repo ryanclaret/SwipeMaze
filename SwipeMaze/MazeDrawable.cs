@@ -19,6 +19,16 @@ public sealed class MazeDrawable : IDrawable
     private static readonly Color FaceColor = Color.FromArgb("#3E2723");
     private static readonly Color HighlightColor = Color.FromArgb("#1E88E5");
 
+    // One colour per firework burst, indexed by FireworkParticle.ColorIndex.
+    private static readonly Color[] FireworkColors =
+    {
+        Color.FromArgb("#FFC107"), Color.FromArgb("#F44336"), Color.FromArgb("#42A5F5"),
+        Color.FromArgb("#66BB6A"), Color.FromArgb("#EC407A"), Color.FromArgb("#AB47BC"),
+    };
+
+    /// <summary>The "Start" / "Finish" words stay this size (in screen units) however far the maze is zoomed.</summary>
+    private const float LabelFontSize = 15f;
+
     /// <summary>The zoomed-in square is allowed to get this big (in screen units) before zooming stops.</summary>
     private const float MaxCellOnScreen = 48f;
 
@@ -40,6 +50,10 @@ public sealed class MazeDrawable : IDrawable
 
     /// <summary>Zoom and pan.</summary>
     public ViewTransform View { get; } = new();
+
+    /// <summary>The celebration drawn over the maze when a level is solved. Its positions are in screen
+    /// units, so zooming and panning don't move it.</summary>
+    public Fireworks Fireworks { get; } = new();
 
     /// <summary>A square to ring in blue, e.g. the one being asked about in "go back here?".</summary>
     public (int Col, int Row)? Highlight { get; set; }
@@ -135,8 +149,16 @@ public sealed class MazeDrawable : IDrawable
         canvas.StrokeLineCap = LineCap.Round;
         canvas.DrawPath(WallsFor(maze, left, top, cell));
 
-        DrawArrow(canvas, CenterX(startCol), top - cell * 0.15f, cell, StartArrow);
-        DrawArrow(canvas, CenterX(finishCol), top + height + cell * 0.85f, cell, FinishArrow);
+        var startTip = top - cell * 0.15f;
+        var finishTip = top + height + cell * 0.85f;
+        DrawArrow(canvas, CenterX(startCol), startTip, cell, StartArrow);
+        DrawArrow(canvas, CenterX(finishCol), finishTip, cell, FinishArrow);
+
+        // The words go beyond the arrows, at a size that doesn't change with the zoom.
+        var zoom = (float)View.Zoom;
+        var arrowHeight = 0.6f * MathF.Max(cell, 6f);
+        DrawLabel(canvas, "Start", CenterX(startCol), startTip - arrowHeight - 2f / zoom, area.Y, above: true, StartArrow, zoom);
+        DrawLabel(canvas, "Finish", CenterX(finishCol), finishTip + 2f / zoom, area.Y + area.Height, above: false, FinishArrow, zoom);
 
         DrawAvatar(canvas, CenterX(attempt.Col), CenterY(attempt.Row), cell);
 
@@ -148,6 +170,41 @@ public sealed class MazeDrawable : IDrawable
         }
 
         canvas.RestoreState();
+
+        // The fireworks sit on top of everything, in screen units (outside the zoom).
+        if (Fireworks.IsActive)
+        {
+            foreach (var p in Fireworks.Snapshot())
+            {
+                canvas.FillColor = FireworkColors[p.ColorIndex].WithAlpha((float)p.Alpha);
+                canvas.FillCircle((float)p.X, (float)p.Y, (float)p.Size);
+            }
+        }
+    }
+
+    /// <summary>
+    /// A word beside an arrow: its edge nearest the arrow at <paramref name="edgeY"/>, extending away from
+    /// it. Drawn in maze coordinates but sized by dividing by the zoom, so it looks the same size on
+    /// screen at any zoom. When showing the whole maze, it shrinks to fit if the room is tight.
+    /// </summary>
+    private static void DrawLabel(ICanvas canvas, string text, float centerX, float edgeY, float limitY,
+        bool above, Color color, float zoom)
+    {
+        var fontSize = LabelFontSize / zoom;
+        if (zoom <= 1.001f)
+        {
+            var room = above ? edgeY - limitY : limitY - edgeY;
+            fontSize = MathF.Min(fontSize, room / 1.4f);
+            if (fontSize < 6f) return;
+        }
+
+        var width = 90f / zoom;
+        var height = fontSize * 1.4f;
+        canvas.Font = Microsoft.Maui.Graphics.Font.DefaultBold;
+        canvas.FontSize = fontSize;
+        canvas.FontColor = color;
+        canvas.DrawString(text, centerX - width / 2f, above ? edgeY - height : edgeY, width, height,
+            HorizontalAlignment.Center, VerticalAlignment.Center);
     }
 
     /// <summary>All the walls as one path: the border (open at the start and finish) plus every closed

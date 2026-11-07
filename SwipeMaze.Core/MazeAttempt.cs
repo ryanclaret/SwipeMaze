@@ -90,6 +90,67 @@ public sealed class MazeAttempt
         return IsFinished ? MoveResult.Finished : MoveResult.Moved;
     }
 
+    /// <summary>
+    /// One swipe: moves in that direction and keeps going without further swipes until there is a choice
+    /// to make, yielding the result of every square moved. Going forward the avatar follows the corridor
+    /// (round bends too) and stops at a fork, a dead end or the finish. Going back along the trail it
+    /// stops at the first square that has another way to go, or at the start. A swipe into a wall yields
+    /// a single <see cref="MoveResult.Wall"/>. The attempt is updated as the results are enumerated, so
+    /// a caller can pause between squares to animate it.
+    /// </summary>
+    public IEnumerable<MoveResult> Run(Direction first)
+    {
+        var from = (Col, Row);
+        var result = Move(first);
+        yield return result;
+
+        if (result is MoveResult.Wall or MoveResult.Finished) yield break;
+
+        if (result == MoveResult.BackedUp)
+        {
+            while (_path.Count > 1 && !HasBranchOtherThan(from))
+            {
+                from = (Col, Row);
+                var towards = _path[^2];
+                yield return Move(DirectionBetween((Col, Row), towards));
+            }
+            yield break;
+        }
+
+        while (true)
+        {
+            // A corridor has exactly one way on. None means a dead end, more than one a fork.
+            Direction? only = null;
+            var ways = 0;
+            foreach (var d in Enum.GetValues<Direction>())
+            {
+                if (!Maze.IsOpen(Col, Row, d) || IsOnPath(Col + d.Dx(), Row + d.Dy())) continue;
+                ways++;
+                only = d;
+            }
+            if (ways != 1) yield break;
+
+            result = Move(only!.Value);
+            yield return result;
+            if (result == MoveResult.Finished) yield break;
+        }
+    }
+
+    /// <summary>True if there's a way to go from here, besides the square just left, onto a square that
+    /// isn't on the trail — i.e. backing up has reached a fork.</summary>
+    private bool HasBranchOtherThan((int Col, int Row) left)
+    {
+        foreach (var d in Enum.GetValues<Direction>())
+        {
+            var target = (Col + d.Dx(), Row + d.Dy());
+            if (Maze.IsOpen(Col, Row, d) && !IsOnPath(target.Item1, target.Item2) && target != left) return true;
+        }
+        return false;
+    }
+
+    private static Direction DirectionBetween((int Col, int Row) from, (int Col, int Row) to) =>
+        Enum.GetValues<Direction>().Single(d => from.Col + d.Dx() == to.Col && from.Row + d.Dy() == to.Row);
+
     /// <summary>Puts the avatar back on an earlier square of the trail and rubs out the trail after it.
     /// False (nothing changes) if that square isn't on the trail or is where the avatar already is.</summary>
     public bool BackUpTo(int col, int row)

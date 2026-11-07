@@ -1,13 +1,14 @@
 # Swipe Maze
 
-An Android maze game. Swipe to move your avatar one square at a time from the opening at the top of the maze to the opening at the bottom. Every maze is generated fresh and winds about instead of heading straight for the finish.
+An Android maze game. Swipe to run your avatar through the maze from the opening at the top (Start) to the opening at the bottom (Finish). Every maze is generated fresh and winds about instead of heading straight for the finish.
 
 ## How to play
 
-- **Move:** swipe up, down, left or right — one swipe is one square.
-- **Back up:** swipe back onto the square you just left, or tap any square on your trail (it asks first) to jump back to it. The trail after that square is erased.
+- **Move:** swipe up, down, left or right. The avatar runs along the corridor, round the bends, until it reaches a fork, a dead end or the finish, so a long corridor is one swipe. At a fork, swipe the way you want to go.
+- **Back up:** swipe back along your trail — it runs back to the nearest fork (or the start). Or tap any square on your trail (it asks first) to jump straight back to it. The trail after that square is erased.
 - **Retry:** starts the same maze over, as often as you like (it asks first, since a trail can be long).
 - **Zoom:** pinch with two fingers to zoom, drag with two fingers to pan. The view follows your avatar, and **Fit** shows the whole maze again.
+- **Sounds:** a whoosh when you swipe (higher or lower depending on the direction), a softer blip when you back up, a buzz when you hit a wall, and a jingle with fireworks when you solve a maze. Sound follows your phone's media volume.
 - **Levels:** 100 levels, one maze each. Level 1 is 10×10 and every level adds one square per side, up to 109×109 at level 100.
 - **Progress:** saved under your name. Come back and pick **Continue** or **Start over**. The leaderboard shows the furthest level each player has reached.
 

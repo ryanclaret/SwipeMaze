@@ -10,6 +10,7 @@ public static class MauiProgram
         builder.UseMauiApp<App>();
 
         builder.Services.AddSingleton(TimeProvider.System);
+        builder.Services.AddSingleton<ISoundPlayer, AndroidSoundPlayer>();
 
         // Private to the app, survives updates.
         var progressPath = Path.Combine(FileSystem.AppDataDirectory, "progress.tsv");

@@ -24,7 +24,7 @@
             <VerticalStackLayout x:Name="StartPanel" VerticalOptions="Center" Spacing="16">
                 <Label Text="Swipe Maze" FontSize="40" FontAttributes="Bold" TextColor="#1B5E20"
                        HorizontalOptions="Center" />
-                <Label Text="Swipe to move one square. Swipe back, or tap a square on your trail, to back up. Pinch to zoom."
+                <Label Text="Swipe to run to the next fork. Swipe back, or tap a square on your trail, to back up. Pinch to zoom."
                        FontSize="16" TextColor="#555555" HorizontalOptions="Center"
                        HorizontalTextAlignment="Center" />
                 <Label Text="What's your name?" FontSize="22" TextColor="#555555"

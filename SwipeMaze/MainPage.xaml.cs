@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using SwipeMaze.Core;
 
 namespace SwipeMaze;
@@ -14,10 +15,12 @@ public partial class MainPage : ContentPage
     /// <summary>How far from a trail square a tap can land and still mean that square.</summary>
     private const double TapSlack = 12;
 
-    private const int SolvedPauseMs = 1400;
+    /// <summary>Pause between squares while the avatar runs along a corridor, so the run can be seen.</summary>
+    private const int StepDelayMs = 12;
 
     private readonly IPlayerProgressRepository _progressStore;
     private readonly TimeProvider _clock;
+    private readonly ISoundPlayer _sounds;
     private readonly MazeDrawable _drawable = new();
 
     private MazeRun? _run;
@@ -25,6 +28,7 @@ public partial class MainPage : ContentPage
     private PlayerProgress? _progress;
     private bool _starting;
     private bool _asking;
+    private bool _animating; // a swipe's run is being shown; further swipes wait
 
     /// <summary>Bumped whenever the game on screen changes, so a pause that was in flight (the
     /// "level complete" message) can tell it no longer belongs to the game on screen and stop.</summary>
@@ -42,11 +46,12 @@ public partial class MainPage : ContentPage
     private bool _pinching;
     private double _pinchStartDistance;
 
-    public MainPage(IPlayerProgressRepository progressStore, TimeProvider clock)
+    public MainPage(IPlayerProgressRepository progressStore, TimeProvider clock, ISoundPlayer sounds)
     {
         InitializeComponent();
         _progressStore = progressStore;
         _clock = clock;
+        _sounds = sounds;
         MazeView.Drawable = _drawable;
 
         // Whoever played last is most likely playing again.
@@ -301,60 +306,126 @@ public partial class MainPage : ContentPage
         UpdateFitButton();
     }
 
+    /// <summary>
+    /// One swipe. The avatar runs along the corridor until there's a choice to make (a fork), hits a dead
+    /// end, or reaches the finish — and going back runs back along the trail the same way. The run is
+    /// shown square by square, with a sound as it sets off: a buzz if it's blocked by a wall.
+    /// </summary>
     private async Task HandleMoveAsync(Direction direction)
     {
         var run = _run;
-        if (run is null || run.Phase != RunPhase.Playing || _asking) return;
+        if (run is null || run.Phase != RunPhase.Playing || _asking || _animating) return;
         var session = _session;
 
-        switch (run.Move(direction))
+        _animating = true;
+        try
         {
-            case MoveResult.Wall:
-                FlashStatus("🧱 Wall!");
-                return;
-
-            case MoveResult.BackedUp:
-                SetStatus("");
-                _drawable.KeepAvatarInView();
-                RefreshHud();
-                return;
-
-            case MoveResult.Moved:
-                SetStatus(run.Attempt.IsDeadEnd ? "💥 Dead end! Swipe back ↩️" : "");
-                _drawable.KeepAvatarInView();
-                RefreshHud();
-                return;
-
-            case MoveResult.Finished:
-                RefreshHud();
-                if (run.Phase == RunPhase.AllComplete)
+            var first = true;
+            var last = MoveResult.Wall;
+            foreach (var result in run.Run(direction))
+            {
+                if (first)
                 {
-                    SetStatus("🏆 You finished every level!");
-                    await SaveProgressAsync(run.Level, completed: true);
-                    await Task.Delay(SolvedPauseMs);
-                    if (session != _session) return;
-                    await ShowLeaderboardAsync($"🏆 All {MazeLevels.Count} levels complete!", $"{_playerName} finished every level!");
+                    _sounds.Play(SoundFor(result, direction));
+                    first = false;
+                }
+                last = result;
+
+                if (result == MoveResult.Wall)
+                {
+                    FlashStatus("🧱 Wall!");
                     return;
                 }
 
-                SetStatus($"🎉 Level {run.Level} complete!");
-                await SaveProgressAsync(run.Level + 1, completed: false); // saved now, so quitting mid-pause loses nothing
-                await Task.Delay(SolvedPauseMs);
+                _drawable.KeepAvatarInView();
+                MazeView.Invalidate();
+                if (result != MoveResult.Finished) await Task.Delay(StepDelayMs);
                 if (session != _session) return;
+            }
 
-                run.Continue();
-                _drawable.View.Reset(); // a new maze, shown whole
-                SetStatus("");
-                RefreshHud();
+            if (last == MoveResult.Finished)
+            {
+                await CelebrateAsync(run, session);
                 return;
+            }
+
+            SetStatus(run.Attempt.IsDeadEnd ? "💥 Dead end! Swipe back ↩️" : "");
+            RefreshHud();
         }
+        finally
+        {
+            _animating = false;
+        }
+    }
+
+    private static Sound SoundFor(MoveResult first, Direction direction) => first switch
+    {
+        MoveResult.Wall => Sound.Wall,
+        MoveResult.BackedUp => Sound.Back,
+        _ => direction switch
+        {
+            Direction.Up => Sound.SwipeUp,
+            Direction.Right => Sound.SwipeRight,
+            Direction.Down => Sound.SwipeDown,
+            _ => Sound.SwipeLeft,
+        },
+    };
+
+    /// <summary>The maze is solved: save it, play the winning sound with fireworks, then on to the next
+    /// level (or the leaderboard, after the last one).</summary>
+    private async Task CelebrateAsync(MazeRun run, int session)
+    {
+        RefreshHud();
+        var allDone = run.Phase == RunPhase.AllComplete;
+
+        SetStatus(allDone ? "🏆 You finished every level!" : $"🎉 Level {run.Level} complete!");
+        // Saved now, so quitting during the fireworks loses nothing.
+        await SaveProgressAsync(allDone ? run.Level : run.Level + 1, completed: allDone);
+
+        await PlayFireworksAsync(session);
+        if (session != _session) return;
+
+        if (allDone)
+        {
+            await ShowLeaderboardAsync($"🏆 All {MazeLevels.Count} levels complete!", $"{_playerName} finished every level!");
+            return;
+        }
+
+        run.Continue();
+        _drawable.View.Reset(); // a new maze, shown whole
+        SetStatus("");
+        RefreshHud();
+    }
+
+    /// <summary>The winning jingle and a few bursts of fireworks over the maze, with a pop for each burst.</summary>
+    private async Task PlayFireworksAsync(int session)
+    {
+        var fireworks = _drawable.Fireworks;
+        fireworks.Start(MazeView.Width, MazeView.Height, bursts: 6, span: 1.6);
+        _sounds.Play(Sound.Win);
+
+        var clock = Stopwatch.StartNew();
+        var previous = 0.0;
+        while (fireworks.IsActive && session == _session)
+        {
+            var now = clock.Elapsed.TotalSeconds;
+            var bursts = fireworks.Update(now - previous);
+            previous = now;
+
+            for (var i = 0; i < bursts; i++) _sounds.Play(Sound.Pop);
+            MazeView.Invalidate();
+            await Task.Delay(16);
+        }
+
+        fireworks.Clear();
+        MazeView.Invalidate();
     }
 
     /// <summary>A tap on a square of the trail asks whether to go back to it.</summary>
     private async Task HandleTapAsync(PointF touch)
     {
         var run = _run;
-        if (run is null || run.Phase != RunPhase.Playing || _asking) return;
+        if (run is null || run.Phase != RunPhase.Playing || _asking || _animating) return;
         if (!_drawable.TryGetCellPosition(touch, out var col, out var row)) return;
 
         // The slack is a fixed size on screen, so on the big mazes (tiny squares) it spans several
@@ -380,6 +451,7 @@ public partial class MainPage : ContentPage
 
         if (goBack && _run == run && run.BackUpTo(target.Col, target.Row))
         {
+            _sounds.Play(Sound.Back);
             SetStatus("");
             _drawable.KeepAvatarInView();
         }
@@ -389,7 +461,7 @@ public partial class MainPage : ContentPage
     private async void OnRetryClicked(object? sender, EventArgs e)
     {
         var run = _run;
-        if (run is null || !run.CanRetry || _asking) return;
+        if (run is null || !run.CanRetry || _asking || _animating) return;
 
         // A long trail is a lot of swipes, so don't let a stray tap throw it away.
         _asking = true;
@@ -405,6 +477,7 @@ public partial class MainPage : ContentPage
 
         if (restart && _run == run && run.Retry())
         {
+            _sounds.Play(Sound.Back);
             SetStatus("");
             _drawable.KeepAvatarInView(); // back at the start square
         }

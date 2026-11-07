@@ -52,6 +52,22 @@ public sealed class MazeRun
         return result;
     }
 
+    /// <summary>
+    /// One swipe: see <see cref="MazeAttempt.Run"/>. Yields the result of each square moved; the run's
+    /// phase changes the moment the finish is reached. Enumerate it fully (or stop partway) — nothing
+    /// moves until it is enumerated.
+    /// </summary>
+    public IEnumerable<MoveResult> Run(Direction d)
+    {
+        if (Phase != RunPhase.Playing) throw new InvalidOperationException($"Can't move while {Phase}.");
+
+        foreach (var result in Attempt.Run(d))
+        {
+            if (result == MoveResult.Finished) Phase = IsLastLevel ? RunPhase.AllComplete : RunPhase.LevelComplete;
+            yield return result;
+        }
+    }
+
     /// <summary>Back to the start of the same maze. Unlimited. False (nothing happens) if there's
     /// nothing to start over.</summary>
     public bool Retry()
