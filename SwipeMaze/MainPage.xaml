@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<ContentPage
+    x:Class="SwipeMaze.MainPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    BackgroundColor="#FFF8E7">
+
+    <Grid RowDefinitions="Auto,*,Auto" Padding="16,12" RowSpacing="8">
+
+        <!-- Level while playing. Every label sets its own TextColor: the default follows the phone's
+             dark mode and would be unreadable on this cream background. -->
+        <VerticalStackLayout x:Name="HeaderPanel" Grid.Row="0" IsVisible="False" Spacing="2"
+                             HorizontalOptions="Center">
+            <Label x:Name="LevelLabel" FontSize="22" FontAttributes="Bold" TextColor="#1B5E20"
+                   HorizontalOptions="Center" />
+            <!-- Fixed height so messages appearing and clearing never resize the maze below. -->
+            <Label x:Name="StatusLabel" FontSize="18" HeightRequest="28" TextColor="#8D6E63"
+                   HorizontalOptions="Center" VerticalTextAlignment="Center" />
+        </VerticalStackLayout>
+
+        <Grid Grid.Row="1">
+
+            <!-- Start screen -->
+            <VerticalStackLayout x:Name="StartPanel" VerticalOptions="Center" Spacing="16">
+                <Label Text="Swipe Maze" FontSize="40" FontAttributes="Bold" TextColor="#1B5E20"
+                       HorizontalOptions="Center" />
+                <Label Text="Swipe to move one square. Swipe back, or tap a square on your trail, to back up. Pinch to zoom."
+                       FontSize="16" TextColor="#555555" HorizontalOptions="Center"
+                       HorizontalTextAlignment="Center" />
+                <Label Text="What's your name?" FontSize="22" TextColor="#555555"
+                       HorizontalOptions="Center" Margin="0,8,0,0" />
+                <Border BackgroundColor="White" Stroke="#8BC34A" StrokeThickness="2"
+                        StrokeShape="RoundRectangle 16" WidthRequest="280" HorizontalOptions="Center"
+                        Padding="14,4">
+                    <Entry x:Name="NameEntry" Placeholder="Type your name" MaxLength="20"
+                           FontSize="24" HorizontalTextAlignment="Center"
+                           TextColor="#1B5E20" PlaceholderColor="#9E9E9E" BackgroundColor="Transparent"
+                           ReturnType="Done" Completed="OnNameCompleted" />
+                </Border>
+                <Label x:Name="NameHintLabel" FontSize="16" TextColor="#C62828" HorizontalOptions="Center" />
+                <Button x:Name="PlayButton" Text="Let's Play!" FontSize="28" Clicked="OnPlayClicked"
+                        BackgroundColor="#8BC34A" TextColor="White" CornerRadius="20"
+                        HeightRequest="70" WidthRequest="260" />
+                <Button Text="🏆 Leaderboard" FontSize="20" Clicked="OnLeaderboardClicked"
+                        BackgroundColor="#2E7834" TextColor="White" CornerRadius="16"
+                        HeightRequest="50" WidthRequest="200" />
+                <Button Text="Quit" FontSize="20" Clicked="OnQuitAppClicked"
+                        BackgroundColor="#8D6E63" TextColor="White" CornerRadius="16"
+                        HeightRequest="50" WidthRequest="140" />
+            </VerticalStackLayout>
+
+            <!-- The maze. Swipes and taps are read from the touch start/end points. -->
+            <GraphicsView x:Name="MazeView" IsVisible="False"
+                          StartInteraction="OnMazeTouchStart"
+                          DragInteraction="OnMazeTouchDrag"
+                          EndInteraction="OnMazeTouchEnd"
+                          CancelInteraction="OnMazeTouchCancel" />
+
+            <!-- Leaderboard: furthest level reached -->
+            <VerticalStackLayout x:Name="LeaderboardPanel" VerticalOptions="Center" Spacing="14"
+                                 IsVisible="False" BackgroundColor="#FFF8E7">
+                <Label x:Name="LeaderboardTitle" FontSize="30" FontAttributes="Bold" TextColor="#1B5E20"
+                       HorizontalOptions="Center" HorizontalTextAlignment="Center" />
+                <Label x:Name="SummaryLabel" FontSize="22" FontAttributes="Bold" TextColor="#1B5E20"
+                       HorizontalOptions="Center" HorizontalTextAlignment="Center" />
+                <Label x:Name="LeaderboardLabel" FontSize="17" TextColor="#1B5E20"
+                       HorizontalOptions="Center" HorizontalTextAlignment="Center" Margin="0,8,0,0" />
+                <Button Text="Back" Clicked="OnLeaderboardBackClicked" FontSize="24"
+                        BackgroundColor="#8BC34A" TextColor="White" CornerRadius="20"
+                        HeightRequest="60" WidthRequest="220" HorizontalOptions="Center" Margin="0,8,0,0" />
+                <Button Text="Quit" Clicked="OnQuitAppClicked" FontSize="20"
+                        BackgroundColor="#8D6E63" TextColor="White" CornerRadius="16"
+                        HeightRequest="50" WidthRequest="140" HorizontalOptions="Center" />
+            </VerticalStackLayout>
+
+        </Grid>
+
+        <!-- Start the maze over, and Quit game, while playing -->
+        <HorizontalStackLayout x:Name="ButtonBar" Grid.Row="2" IsVisible="False" Spacing="12"
+                               HorizontalOptions="Center">
+            <Button x:Name="RetryButton" Text="🔁 Retry" Clicked="OnRetryClicked"
+                    BackgroundColor="#2E7834" TextColor="White" CornerRadius="16"
+                    HeightRequest="48" WidthRequest="112" Padding="4,0" />
+            <!-- Back to the whole maze after pinching in. Dimmed while already showing all of it. -->
+            <Button x:Name="FitButton" Text="🔍 Fit" Clicked="OnFitClicked"
+                    BackgroundColor="#2E7834" TextColor="White" CornerRadius="16"
+                    HeightRequest="48" WidthRequest="96" Padding="4,0" />
+            <Button Text="✖ Quit" Clicked="OnQuitGameClicked"
+                    BackgroundColor="Transparent" TextColor="#8D6E63" BorderColor="#8D6E63" BorderWidth="1.5"
+                    CornerRadius="14" HeightRequest="48" WidthRequest="112" Padding="4,0" />
+        </HorizontalStackLayout>
+
+    </Grid>
+
+</ContentPage>
