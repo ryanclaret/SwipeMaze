@@ -8,6 +8,7 @@ namespace SwipeMaze;
 public partial class MainPage : ContentPage
 {
     private const string NamePreferenceKey = "player_name";
+    private const string CenterPreferenceKey = "center_avatar";
 
     /// <summary>How far (in device-independent units) a finger must travel to count as a swipe.</summary>
     private const double SwipeDistance = 20;
@@ -59,6 +60,10 @@ public partial class MainPage : ContentPage
 
         // The "please type your name" reminder has done its job once they start typing.
         NameEntry.TextChanged += (_, _) => NameHintLabel.Text = "";
+
+        // Whether zooming keeps the avatar in the middle: on unless they turned it off.
+        _drawable.CenterAvatar = Preferences.Default.Get(CenterPreferenceKey, true);
+        UpdateCenterButton();
     }
 
     // ---------------- dialogs ----------------
@@ -485,6 +490,28 @@ public partial class MainPage : ContentPage
         UpdateFitButton();
     }
 
+    /// <summary>Turns "keep the avatar centered when zoomed in" on or off, and remembers the choice.</summary>
+    private void OnCenterClicked(object? sender, EventArgs e)
+    {
+        _drawable.CenterAvatar = !_drawable.CenterAvatar;
+        Preferences.Default.Set(CenterPreferenceKey, _drawable.CenterAvatar);
+        UpdateCenterButton();
+
+        FlashStatus(_drawable.CenterAvatar ? "🎯 Avatar stays centered" : "🎯 Avatar not centered");
+        if (_drawable.CenterAvatar) _drawable.FollowAvatar(); // take effect straight away
+        MazeView.Invalidate();
+    }
+
+    /// <summary>Filled green when centering is on, just an outline when it is off.</summary>
+    private void UpdateCenterButton()
+    {
+        var green = Color.FromArgb("#2E7834");
+        var on = _drawable.CenterAvatar;
+        CenterButton.BackgroundColor = on ? green : Colors.Transparent;
+        CenterButton.TextColor = on ? Colors.White : green;
+        CenterButton.BorderColor = green;
+    }
+
     /// <summary>
     /// One swipe. The avatar runs along the corridor until there's a choice to make (a fork), hits a dead
     /// end, or reaches the finish — and going back runs back along the trail the same way. The run is
@@ -516,7 +543,7 @@ public partial class MainPage : ContentPage
                     return;
                 }
 
-                _drawable.CenterOnAvatar();
+                _drawable.FollowAvatar();
                 MazeView.Invalidate();
                 if (result != MoveResult.Finished) await Task.Delay(StepDelayMs);
                 if (session != _session) return;
@@ -635,7 +662,7 @@ public partial class MainPage : ContentPage
         {
             _sounds.Play(Sound.Back);
             SetStatus("");
-            _drawable.CenterOnAvatar();
+            _drawable.FollowAvatar();
             await SaveGameAsync(run, _session);
         }
         RefreshHud();
@@ -662,7 +689,7 @@ public partial class MainPage : ContentPage
         {
             _sounds.Play(Sound.Back);
             SetStatus("");
-            _drawable.CenterOnAvatar(); // back at the start square
+            _drawable.FollowAvatar(); // back at the start square
             await SaveGameAsync(run, _session);
         }
         RefreshHud();

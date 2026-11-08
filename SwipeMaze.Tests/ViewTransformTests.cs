@@ -203,12 +203,46 @@ public class ViewTransformTests
         }
     }
 
+    // ---- the "centering off" mode: pan only as far as needed to keep a point from the edge ----
+
+    [Fact]
+    public void A_point_near_the_edge_is_brought_back_into_view()
+    {
+        var view = View(w: 400, h: 800);
+        view.BeginPinch(200, 400);
+        view.UpdatePinch(200, 400, scale: 4);
+        view.BeginPinch(0, 0);
+        view.UpdatePinch(0, 0, scale: 1); // pinned to the top-left of the maze
+        var (wx, wy) = view.ToWorld(390, 790); // a world point right at the bottom-right of the screen
+
+        view.EnsureVisible(wx, wy, margin: 80);
+
+        var (sx, sy) = view.ToScreen(wx, wy);
+        Assert.InRange(sx, 80 - 0.001, 320 + 0.001);
+        Assert.InRange(sy, 80 - 0.001, 720 + 0.001);
+    }
+
+    [Fact]
+    public void A_point_already_well_inside_does_not_move_the_view()
+    {
+        var view = View();
+        view.BeginPinch(200, 400);
+        view.UpdatePinch(200, 400, scale: 4);
+        var (x0, y0) = (view.X, view.Y);
+        var (wx, wy) = view.ToWorld(200, 400);
+
+        view.EnsureVisible(wx, wy, margin: 80);
+
+        Assert.Equal((x0, y0), (view.X, view.Y));
+    }
+
     [Fact]
     public void Nothing_follows_when_the_maze_is_not_zoomed()
     {
         var view = View();
 
         view.CenterOn(1000, 1000);
+        view.EnsureVisible(1000, 1000, margin: 80);
 
         Assert.Equal((0.0, 0.0), (view.X, view.Y));
     }

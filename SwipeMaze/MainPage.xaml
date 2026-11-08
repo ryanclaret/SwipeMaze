@@ -87,19 +87,23 @@
         </Grid>
 
         <!-- Start the maze over, and Quit game, while playing -->
-        <HorizontalStackLayout x:Name="ButtonBar" Grid.Row="2" IsVisible="False" Spacing="12"
-                               HorizontalOptions="Center">
-            <Button x:Name="RetryButton" Text="🔁 Retry" Clicked="OnRetryClicked"
+        <!-- Four buttons share the width, so they still fit on a narrow phone. -->
+        <Grid x:Name="ButtonBar" Grid.Row="2" IsVisible="False" ColumnSpacing="8"
+              ColumnDefinitions="1.15*,*,1.1*,1.05*">
+            <Button x:Name="RetryButton" Grid.Column="0" Text="🔁 Retry" Clicked="OnRetryClicked"
                     BackgroundColor="#2E7834" TextColor="White" CornerRadius="16"
-                    HeightRequest="48" WidthRequest="112" Padding="4,0" />
+                    HeightRequest="48" Padding="2,0" />
             <!-- Back to the whole maze after pinching in. Dimmed while already showing all of it. -->
-            <Button x:Name="FitButton" Text="🔍 Fit" Clicked="OnFitClicked"
+            <Button x:Name="FitButton" Grid.Column="1" Text="🔍 Fit" Clicked="OnFitClicked"
                     BackgroundColor="#2E7834" TextColor="White" CornerRadius="16"
-                    HeightRequest="48" WidthRequest="96" Padding="4,0" />
-            <Button Text="✖ Quit" Clicked="OnQuitGameClicked"
+                    HeightRequest="48" Padding="2,0" />
+            <!-- Whether zooming keeps the avatar in the middle. Filled = on, outlined = off. -->
+            <Button x:Name="CenterButton" Grid.Column="2" Text="🎯 Center" Clicked="OnCenterClicked"
+                    BorderWidth="1.5" CornerRadius="16" HeightRequest="48" Padding="2,0" />
+            <Button Grid.Column="3" Text="✖ Quit" Clicked="OnQuitGameClicked"
                     BackgroundColor="Transparent" TextColor="#8D6E63" BorderColor="#8D6E63" BorderWidth="1.5"
-                    CornerRadius="14" HeightRequest="48" WidthRequest="112" Padding="4,0" />
-        </HorizontalStackLayout>
+                    CornerRadius="14" HeightRequest="48" Padding="2,0" />
+        </Grid>
 
     </Grid>
 

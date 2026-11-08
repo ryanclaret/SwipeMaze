@@ -77,14 +77,19 @@ public sealed class MazeDrawable : IDrawable
         return true;
     }
 
-    /// <summary>Pans, if the maze is zoomed in, to put the avatar in the middle of the view.</summary>
-    public void CenterOnAvatar()
+    /// <summary>True: the avatar is kept in the middle of the view as it moves. False: the view only pans
+    /// far enough to keep the avatar from getting near or past an edge.</summary>
+    public bool CenterAvatar { get; set; } = true;
+
+    /// <summary>Pans, if the maze is zoomed in, to follow the avatar (see <see cref="CenterAvatar"/>).</summary>
+    public void FollowAvatar()
     {
         if (Run is not { } run || _cell <= 0) return;
 
         var x = _left + (run.Attempt.Col + 0.5) * _cell;
         var y = _top + (run.Attempt.Row + 0.5) * _cell;
-        View.CenterOn(x, y);
+        if (CenterAvatar) View.CenterOn(x, y);
+        else View.EnsureVisible(x, y, margin: Math.Min(View.ViewWidth, View.ViewHeight) * 0.2);
     }
 
     public void Draw(ICanvas canvas, RectF area)
