@@ -64,22 +64,16 @@ public sealed class ViewTransform
     }
 
     /// <summary>
-    /// Pans just enough to bring a world point back within <paramref name="margin"/> of the view's edges.
-    /// Nothing happens if it is already comfortably inside, or the maze isn't zoomed.
+    /// Pans so a world point is in the middle of the view. Nothing happens if the maze isn't zoomed. Near
+    /// the maze's edge the view can't slide past it, so the point ends up as close to the middle as the
+    /// edge allows.
     /// </summary>
-    public void EnsureVisible(double worldX, double worldY, double margin)
+    public void CenterOn(double worldX, double worldY)
     {
         if (!IsZoomed) return;
 
-        var (sx, sy) = ToScreen(worldX, worldY);
-        margin = Math.Min(margin, Math.Min(ViewWidth, ViewHeight) / 2);
-
-        if (sx < margin) X += margin - sx;
-        else if (sx > ViewWidth - margin) X -= sx - (ViewWidth - margin);
-
-        if (sy < margin) Y += margin - sy;
-        else if (sy > ViewHeight - margin) Y -= sy - (ViewHeight - margin);
-
+        X = ViewWidth / 2 - worldX * Zoom;
+        Y = ViewHeight / 2 - worldY * Zoom;
         Clamp();
     }
 

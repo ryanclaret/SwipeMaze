@@ -142,24 +142,22 @@ public class ViewTransformTests
     }
 
     [Fact]
-    public void A_point_near_the_edge_is_brought_back_into_view()
+    public void Centering_puts_the_point_in_the_middle_of_the_view()
     {
         var view = View(w: 400, h: 800);
-        view.BeginPinch(200, 400);
-        view.UpdatePinch(200, 400, scale: 4);
         view.BeginPinch(0, 0);
-        view.UpdatePinch(0, 0, scale: 1); // pinned to the top-left of the maze
-        var (wx, wy) = view.ToWorld(390, 790); // a world point right at the bottom-right of the screen
+        view.UpdatePinch(0, 0, scale: 4);       // zoomed in, showing the top-left of the maze
+        var (wx, wy) = (200.0, 400.0);          // a world point comfortably inside the maze
 
-        view.EnsureVisible(wx, wy, margin: 80);
+        view.CenterOn(wx, wy);
 
         var (sx, sy) = view.ToScreen(wx, wy);
-        Assert.InRange(sx, 80 - 0.001, 320 + 0.001);
-        Assert.InRange(sy, 80 - 0.001, 720 + 0.001);
+        Assert.Equal(200, sx, 6);
+        Assert.Equal(400, sy, 6);
     }
 
     [Fact]
-    public void A_point_already_well_inside_does_not_move_the_view()
+    public void Centering_a_point_already_in_the_middle_changes_nothing()
     {
         var view = View();
         view.BeginPinch(200, 400);
@@ -167,9 +165,42 @@ public class ViewTransformTests
         var (x0, y0) = (view.X, view.Y);
         var (wx, wy) = view.ToWorld(200, 400);
 
-        view.EnsureVisible(wx, wy, margin: 80);
+        view.CenterOn(wx, wy);
 
-        Assert.Equal((x0, y0), (view.X, view.Y));
+        Assert.Equal(x0, view.X, 6);
+        Assert.Equal(y0, view.Y, 6);
+    }
+
+    [Fact]
+    public void Centering_near_the_maze_edge_stops_at_the_edge_instead_of_showing_empty_space()
+    {
+        var view = View(w: 400, h: 800);
+        view.BeginPinch(200, 400);
+        view.UpdatePinch(200, 400, scale: 4);
+
+        view.CenterOn(5, 5);                    // the top-left corner of the maze
+
+        Assert.Equal((0.0, 0.0), (view.X, view.Y));   // can't slide past the corner
+        view.CenterOn(395, 795);                // the bottom-right corner
+        Assert.Equal(400 - 400 * 4, view.X, 6);
+        Assert.Equal(800 - 800 * 4, view.Y, 6);
+    }
+
+    [Fact]
+    public void Following_the_avatar_step_by_step_keeps_it_in_the_middle()
+    {
+        var view = View(w: 400, h: 800);
+        view.BeginPinch(0, 0);
+        view.UpdatePinch(0, 0, scale: 5);
+
+        for (var step = 0; step < 20; step++)
+        {
+            var (wx, wy) = (150 + step * 6.0, 300 + step * 9.0);   // inside the maze, away from the edges
+            view.CenterOn(wx, wy);
+            var (sx, sy) = view.ToScreen(wx, wy);
+            Assert.Equal(200, sx, 6);
+            Assert.Equal(400, sy, 6);
+        }
     }
 
     [Fact]
@@ -177,7 +208,7 @@ public class ViewTransformTests
     {
         var view = View();
 
-        view.EnsureVisible(1000, 1000, margin: 80);
+        view.CenterOn(1000, 1000);
 
         Assert.Equal((0.0, 0.0), (view.X, view.Y));
     }

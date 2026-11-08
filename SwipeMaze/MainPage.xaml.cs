@@ -516,7 +516,7 @@ public partial class MainPage : ContentPage
                     return;
                 }
 
-                _drawable.KeepAvatarInView();
+                _drawable.CenterOnAvatar();
                 MazeView.Invalidate();
                 if (result != MoveResult.Finished) await Task.Delay(StepDelayMs);
                 if (session != _session) return;
@@ -635,7 +635,7 @@ public partial class MainPage : ContentPage
         {
             _sounds.Play(Sound.Back);
             SetStatus("");
-            _drawable.KeepAvatarInView();
+            _drawable.CenterOnAvatar();
             await SaveGameAsync(run, _session);
         }
         RefreshHud();
@@ -662,7 +662,7 @@ public partial class MainPage : ContentPage
         {
             _sounds.Play(Sound.Back);
             SetStatus("");
-            _drawable.KeepAvatarInView(); // back at the start square
+            _drawable.CenterOnAvatar(); // back at the start square
             await SaveGameAsync(run, _session);
         }
         RefreshHud();
