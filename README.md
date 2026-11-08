@@ -19,11 +19,22 @@ Download the APK from the [latest release](../../releases/latest), open it on yo
 
 The app asks for no permissions. Your name and level are stored only on your phone.
 
+## Web version
+
+The same game also runs in a browser (phones, tablets and PCs, including iPhone and iPad), built from the same `SwipeMaze.Core` code so the mazes and rules are identical. It is a static site: progress, saved mazes and the player list are kept in the browser on that device, and nothing is sent anywhere. It can be added to a phone's Home Screen and plays offline after the first load.
+
+Build the site with `build-play.bat` (needs the .NET SDK). It produces `dist\play-site` and `dist\SwipeMaze-web.zip`, plain files that any static host (Cloudflare, Netlify, ...) can serve from its root. Upload the **zip** rather than dragging in loose files. The script writes the zip with forward-slash paths on purpose: a zip made by Windows PowerShell's `Compress-Archive` stores backslashes, which a Linux host turns into one oddly named file instead of a folder.
+
+Two things about hosting, both learned the hard way:
+- A host that redirects `/index.html` to `/` (Cloudflare does) breaks a service worker that stores the redirected page: the first visit works and every later launch fails with "Website not available". `service-worker.published.js` stores and serves a plain copy to avoid this.
+- A device that already installed the broken worker repairs itself when the browser next re-checks the worker (within about a day), or at once if the site's data is cleared.
+
 ## Build
 
 ```
 SwipeMaze.Core/    Maze generation, game rules, leaderboard (no platform code, unit tested)
 SwipeMaze/         .NET MAUI Android app
+SwipeMaze.Play/    Blazor WebAssembly web version (static site)
 SwipeMaze.Tests/   xUnit tests
 ```
 

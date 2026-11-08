@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <!-- No pinch-zooming the page itself: the maze handles pinch. viewport-fit=cover lets it use the whole
+         screen on phones with a notch; the page pads itself back in with the safe-area insets. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>Swipe Maze</title>
+    <base href="/" />
+    <meta name="description" content="Swipe through 100 levels of ever-bigger mazes." />
+    <meta name="theme-color" content="#FFF8E7" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Swipe Maze" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="preload" id="webassembly" />
+    <link rel="stylesheet" href="css/app.css" />
+    <link rel="icon" type="image/png" href="favicon.png" />
+    <link href="manifest.webmanifest" rel="manifest" />
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+    <script type="importmap"></script>
+</head>
+
+<body>
+    <div id="app">
+        <div class="loading">
+            <div class="loading-title">Swipe Maze</div>
+            <div class="loading-note">Loading… the first visit downloads the game (about 10 MB), then it works offline.</div>
+        </div>
+    </div>
+
+    <div id="blazor-error-ui">
+        Something went wrong.
+        <a href="." class="reload">Reload</a>
+        <span class="dismiss">🗙</span>
+    </div>
+    <script src="js/game.js"></script>
+    <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
+    <script>
+        // Offline support. If the browser refuses (or this is a plain-http address), the game still plays online.
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('service-worker.js', { updateViaCache: 'none' }).catch(() => { });
+        }
+    </script>
+    <script>
+        // A way out if the game never starts. The usual cause is the browser holding on to files from an earlier
+        // visit (or from a moment when the site was being updated), so this clears the offline copy and fetches
+        // every game file fresh. It does not touch saved progress, which lives somewhere else.
+        setTimeout(function () {
+            var loading = document.querySelector('#app .loading');
+            if (!loading) return;                                    // the game has started
+            var help = document.createElement('div');
+            help.className = 'loading-help';
+            help.innerHTML = '<p>Taking a long time? On a slow connection this can be normal. If it stays stuck, try this:</p>' +
+                '<button type="button" id="repair">Clear saved game files and retry</button>' +
+                '<p id="repair-note"></p>';
+            loading.appendChild(help);
+            document.getElementById('repair').onclick = async function () {
+                var note = document.getElementById('repair-note');
+                note.textContent = 'Working…';
+                try {
+                    if (navigator.serviceWorker) {
+                        var regs = await navigator.serviceWorker.getRegistrations();
+                        await Promise.all(regs.map(function (r) { return r.unregister(); }));
+                    }
+                    if (window.caches) {
+                        var keys = await caches.keys();
+                        await Promise.all(keys.map(function (k) { return caches.delete(k); }));
+                    }
+                    // Fetch every game file again, bypassing the browser's copy, so a stale "not found" is replaced.
+                    var list = await (await fetch('service-worker-assets.js', { cache: 'reload' })).text();
+                    var urls = (list.match(/"url":\s*"([^"]+)"/g) || []).map(function (m) { return m.replace(/"url":\s*"/, '').replace(/"$/, ''); });
+                    urls.push('index.html', 'css/app.css', 'js/game.js');
+                    await Promise.all(urls.map(function (u) { return fetch(u, { cache: 'reload' }).catch(function () { }); }));
+                } catch (e) { /* reload anyway */ }
+                location.reload();
+            };
+        }, 20000);
+    </script>
+</body>
+
+</html>

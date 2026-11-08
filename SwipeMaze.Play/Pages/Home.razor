@@ -1,0 +1,93 @@
+﻿@page "/"
+
+<PageTitle>Swipe Maze</PageTitle>
+
+<div class="app">
+
+    <!-- Level while playing -->
+    <header class="hud" hidden="@(_screen != Screen.Game)">
+        <div class="level">@LevelText</div>
+        <div class="status">@_status</div>
+    </header>
+
+    <main class="stage">
+
+        <!-- The maze. Always in the page (so it keeps its size); just hidden outside a game. -->
+        <canvas id="maze" class="@(_screen == Screen.Game ? "" : "hidden")"></canvas>
+
+        @if (_screen == Screen.Start)
+        {
+            <section class="panel">
+                <h1>Swipe Maze</h1>
+                <p class="blurb">Swipe to run to the next fork. Swipe back, or tap a square on your trail, to back up. Pinch to zoom.</p>
+                <p class="ask">What's your name?</p>
+                <input id="nameInput" class="name" type="text" maxlength="20" placeholder="Type your name"
+                       autocomplete="off" autocapitalize="words" enterkeyhint="done" spellcheck="false"
+                       value="@_name" @oninput="OnNameInput" @onkeydown="OnNameKey" />
+                <div class="pair">
+                    <button class="btn mid" @onclick="OnChoosePlayerClicked">👥 Choose player</button>
+                    <button class="btn danger-outline" @onclick="OnRemovePlayerClicked">🗑 Remove</button>
+                </div>
+                <div class="hint">@_hint</div>
+                <button class="btn play" @onclick="OnPlayClicked">Let's Play!</button>
+                <button class="btn mid wide" @onclick="OnLeaderboardClicked">🏆 Leaderboard</button>
+            </section>
+        }
+
+        @if (_screen == Screen.Leaderboard)
+        {
+            <section class="panel">
+                <h1 class="board-title">@_boardTitle</h1>
+                @if (_boardSummary.Length > 0)
+                {
+                    <p class="board-summary">@_boardSummary</p>
+                }
+                @if (_boardLines.Count == 0)
+                {
+                    <p class="board-lines">No levels completed yet — you could be the first!</p>
+                }
+                else
+                {
+                    <ol class="board-lines">
+                        @foreach (var line in _boardLines)
+                        {
+                            <li>@line</li>
+                        }
+                    </ol>
+                }
+                <button class="btn play" @onclick="OnLeaderboardBackClicked">Back</button>
+            </section>
+        }
+    </main>
+
+    <!-- Start the maze over, fit it back to the screen, centering on or off, quit -->
+    <footer class="bar" hidden="@(_screen != Screen.Game)">
+        <button class="btn mid" disabled="@(_run is null || !_run.CanRetry)" @onclick="OnRetryClicked">🔁 Retry</button>
+        <button class="btn mid" disabled="@(!_view.IsZoomed)" @onclick="OnFitClicked">🔍 Fit</button>
+        <button class="btn @(_centerAvatar ? "mid" : "mid-outline")" @onclick="OnCenterClicked">🎯 Center</button>
+        <button class="btn brown-outline" @onclick="OnQuitGameClicked">✖ Quit</button>
+    </footer>
+
+</div>
+
+<!-- The one dialog used for every question the game asks (confirmations and choices) -->
+@if (_dialog is { } dialog)
+{
+    <div class="overlay @(dialog.AtBottom ? "bottom" : "")">
+        <div class="card" role="dialog" aria-modal="true">
+            <h2>@dialog.Title</h2>
+            @if (dialog.Message.Length > 0)
+            {
+                <p>@dialog.Message</p>
+            }
+            <div class="choices">
+                @for (var i = 0; i < dialog.Buttons.Length; i++)
+                {
+                    var index = i;
+                    var (text, style) = dialog.Buttons[i];
+                    <button class="btn choice @StyleClass(style)" @onclick="() => CloseDialog(index)">@text</button>
+                }
+            </div>
+        </div>
+    </div>
+}

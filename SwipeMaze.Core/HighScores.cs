@@ -192,10 +192,23 @@ public sealed class FilePlayerProgressRepository(string path) : IPlayerProgressR
         return players;
     }
 
-    private static string Format(PlayerProgress p) =>
+    private static string Format(PlayerProgress p) => PlayerProgressLine.Format(p);
+
+    private static bool TryParse(string line, out PlayerProgress player) => PlayerProgressLine.TryParse(line, out player);
+}
+
+/// <summary>
+/// One player's progress as a line of text (tab-separated: best level, current level, completed, unix
+/// time, name — name last because it's the only free text). Shared by every place that stores progress,
+/// so the Android file and the browser's local storage read and write the same thing.
+/// </summary>
+public static class PlayerProgressLine
+{
+    public static string Format(PlayerProgress p) =>
         string.Join('\t', p.BestLevel, p.CurrentLevel, p.Completed ? 1 : 0, p.When.ToUnixTimeSeconds(), p.Name);
 
-    private static bool TryParse(string line, out PlayerProgress player)
+    /// <summary>False for anything damaged, so a bad line is skipped rather than fatal.</summary>
+    public static bool TryParse(string line, out PlayerProgress player)
     {
         player = null!;
         var parts = line.Split('\t', 5);

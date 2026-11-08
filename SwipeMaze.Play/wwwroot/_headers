@@ -1,0 +1,15 @@
+# Read by Netlify and Cloudflare Pages (other hosts ignore it).
+# The page and the offline worker are re-checked on every visit, so a new version reaches players. The game's
+# own files use the host's default (the browser re-checks them cheaply), NOT a long cache: a visitor who loads
+# the site at a moment when a file is missing would otherwise have that "not found" remembered for a long time.
+# The offline copy kept by the service worker is what makes repeat visits fast.
+/
+  Cache-Control: no-cache
+/index.html
+  Cache-Control: no-cache
+/service-worker.js
+  Cache-Control: no-cache
+/service-worker-assets.js
+  Cache-Control: no-cache
+/manifest.webmanifest
+  Cache-Control: no-cache

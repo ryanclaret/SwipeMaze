@@ -6,3 +6,4 @@ obj/
 *.jks
 keystore-password*
 *.aab
+dist/
