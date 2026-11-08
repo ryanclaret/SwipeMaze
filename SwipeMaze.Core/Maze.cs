@@ -44,6 +44,37 @@ public sealed class Maze
         _open[nr * Cols + nc] |= (byte)(1 << (int)d.Opposite());
     }
 
+    /// <summary>The maze's passages as bytes (one per cell, row by row), for saving. See <see cref="Import"/>.</summary>
+    public byte[] Export() => (byte[])_open.Clone();
+
+    /// <summary>Rebuilds a maze from <see cref="Export"/> bytes. Null if they don't describe a sound maze:
+    /// wrong length, unknown bits, a passage through the border, or a passage open from one side only.</summary>
+    public static Maze? Import(int cols, int rows, byte[] data)
+    {
+        if (cols < 2 || rows < 2 || data.Length != cols * rows) return null;
+
+        var maze = new Maze(cols, rows);
+        for (var row = 0; row < rows; row++)
+        {
+            for (var col = 0; col < cols; col++)
+            {
+                var bits = data[row * cols + col];
+                if (bits > 0b1111) return null;
+                foreach (var d in Enum.GetValues<Direction>())
+                {
+                    if ((bits & (1 << (int)d)) == 0) continue;
+                    var nc = col + d.Dx();
+                    var nr = row + d.Dy();
+                    if (!maze.InBounds(nc, nr)) return null;
+                    if ((data[nr * cols + nc] & (1 << (int)d.Opposite())) == 0) return null;
+                }
+            }
+        }
+
+        Buffer.BlockCopy(data, 0, maze._open, 0, data.Length);
+        return maze;
+    }
+
     /// <summary>How many walls have been knocked down. A "perfect" maze (exactly one route between
     /// any two cells) has Cols * Rows - 1.</summary>
     public int PassageCount

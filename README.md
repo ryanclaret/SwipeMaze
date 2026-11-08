@@ -10,7 +10,8 @@ An Android maze game. Swipe to run your avatar through the maze from the opening
 - **Zoom:** pinch with two fingers to zoom, drag with two fingers to pan. The view follows your avatar, and **Fit** shows the whole maze again.
 - **Sounds:** a whoosh when you swipe (higher or lower depending on the direction), a softer blip when you back up, a buzz when you hit a wall, and a jingle with fireworks when you solve a maze. Sound follows your phone's media volume.
 - **Levels:** 100 levels, one maze each. Level 1 is 10×10 and every level adds one square per side, up to 109×109 at level 100.
-- **Progress:** saved under your name. Come back and pick **Continue** or **Start over**. The leaderboard shows the furthest level each player has reached.
+- **Progress:** saved under your name, including the maze you're in and where the avatar is. Come back and pick **Continue** (right where you left off) or **Start over**. The leaderboard shows the furthest level each player has reached.
+- **Players:** tap **Choose player** to pick a name that has played before instead of retyping it, or **Remove** (with a confirmation) to delete a player and their saved progress.
 
 ## Install
 

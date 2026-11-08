@@ -36,6 +36,21 @@ public interface IPlayerProgressRepository
 
     /// <summary>The leaderboard: furthest first, at most <see cref="Leaderboard.MaxEntries"/>.</summary>
     Task<IReadOnlyList<PlayerProgress>> GetTopAsync();
+
+    /// <summary>Everyone who has played, most recently active first (for picking an existing name).</summary>
+    Task<IReadOnlyList<PlayerProgress>> GetAllAsync();
+
+    /// <summary>Removes this player and their progress. Returns false if there was no such player.</summary>
+    Task<bool> DeleteAsync(string name);
+
+    /// <summary>Saves the maze this player is part-way through (replacing any earlier one).</summary>
+    Task SaveGameAsync(string name, SavedGame game);
+
+    /// <summary>The maze this player is part-way through, or null if none (or it can't be read).</summary>
+    Task<SavedGame?> LoadGameAsync(string name);
+
+    /// <summary>Forgets the player's game in progress, if any.</summary>
+    Task ClearGameAsync(string name);
 }
 
 public static class Leaderboard
@@ -89,6 +104,80 @@ public sealed class FilePlayerProgressRepository(string path) : IPlayerProgressR
         await _lock.WaitAsync();
         try { return Leaderboard.Rank(await ReadAllAsync()); }
         finally { _lock.Release(); }
+    }
+
+    public async Task<IReadOnlyList<PlayerProgress>> GetAllAsync()
+    {
+        await _lock.WaitAsync();
+        try { return (await ReadAllAsync()).OrderByDescending(p => p.When).ThenBy(p => p.Name, StringComparer.OrdinalIgnoreCase).ToList(); }
+        finally { _lock.Release(); }
+    }
+
+    public async Task<bool> DeleteAsync(string name)
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            var all = await ReadAllAsync();
+            var removed = all.RemoveAll(p => SameName(p.Name, name)) > 0;
+            if (removed)
+            {
+                var temp = path + ".tmp";
+                await File.WriteAllLinesAsync(temp, all.Select(Format));
+                File.Move(temp, path, overwrite: true);
+            }
+
+            DeleteGameFile(name);
+            return removed;
+        }
+        finally { _lock.Release(); }
+    }
+
+    // Each player's game in progress is a small file of its own in a folder beside the progress file,
+    // named by a hash of the (case-insensitive) player name so any name makes a safe file name.
+    private string GamesDirectory => path + ".games";
+
+    private string GamePath(string name) =>
+        Path.Combine(GamesDirectory, Convert.ToHexString(
+            System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(name.ToUpperInvariant())))[..24] + ".txt");
+
+    public async Task SaveGameAsync(string name, SavedGame game)
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            Directory.CreateDirectory(GamesDirectory);
+            var file = GamePath(name);
+            var temp = file + ".tmp";
+            await File.WriteAllTextAsync(temp, game.Serialize());
+            File.Move(temp, file, overwrite: true);
+        }
+        finally { _lock.Release(); }
+    }
+
+    public async Task<SavedGame?> LoadGameAsync(string name)
+    {
+        await _lock.WaitAsync();
+        try
+        {
+            var file = GamePath(name);
+            return File.Exists(file) ? SavedGame.Parse(await File.ReadAllTextAsync(file)) : null;
+        }
+        finally { _lock.Release(); }
+    }
+
+    public async Task ClearGameAsync(string name)
+    {
+        await _lock.WaitAsync();
+        try { DeleteGameFile(name); }
+        finally { _lock.Release(); }
+    }
+
+    /// <summary>File.Delete ignores a missing file but throws if the whole folder is missing (nobody has saved a game yet).</summary>
+    private void DeleteGameFile(string name)
+    {
+        var file = GamePath(name);
+        if (File.Exists(file)) File.Delete(file);
     }
 
     private static bool SameName(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);

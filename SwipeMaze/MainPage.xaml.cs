@@ -61,6 +61,97 @@ public partial class MainPage : ContentPage
         NameEntry.TextChanged += (_, _) => NameHintLabel.Text = "";
     }
 
+    // ---------------- dialogs ----------------
+
+    private enum DialogStyle { Primary, Danger, Neutral }
+
+    private TaskCompletionSource<int>? _dialog;
+
+    // Touches stop at the overlay; nothing to do (a stray tap outside the card must not dismiss it).
+    private void OnDialogBackdropTapped(object? sender, TappedEventArgs e) { }
+
+    /// <summary>Android's Back button answers the open dialog as "cancel" instead of leaving the game.</summary>
+    protected override bool OnBackButtonPressed()
+    {
+        if (_dialog is null) return base.OnBackButtonPressed();
+        CloseDialog(-1);
+        return true;
+    }
+
+    private void CloseDialog(int result)
+    {
+        var dialog = _dialog;
+        if (dialog is null) return;
+        _dialog = null;
+        DialogOverlay.IsVisible = false;
+        DialogButtons.Children.Clear();
+        dialog.TrySetResult(result);
+    }
+
+    /// <summary>
+    /// Shows the game's own dialog and returns the index of the button tapped (-1 if dismissed with the
+    /// Back button, or if another dialog is already open). With <paramref name="atBottom"/> the card sits
+    /// at the foot of the screen over a lighter shade, so the maze above it stays visible.
+    /// </summary>
+    private async Task<int> ShowDialogAsync(string title, string message, bool atBottom,
+        params (string Text, DialogStyle Style)[] buttons)
+    {
+        if (_dialog is not null) return -1;
+        var dialog = _dialog = new TaskCompletionSource<int>();
+
+        DialogTitle.Text = title;
+        DialogMessage.Text = message;
+        DialogMessage.IsVisible = message.Length > 0;
+
+        DialogButtons.Children.Clear();
+        for (var i = 0; i < buttons.Length; i++)
+        {
+            var index = i;
+            var (text, style) = buttons[i];
+            var button = new Button
+            {
+                Text = text,
+                FontSize = 20,
+                HeightRequest = 52,
+                CornerRadius = 16,
+                Padding = new Thickness(8, 0),
+                BackgroundColor = style switch
+                {
+                    DialogStyle.Primary => Color.FromArgb("#8BC34A"),
+                    DialogStyle.Danger => Color.FromArgb("#C62828"),
+                    _ => Colors.Transparent,
+                },
+                TextColor = style == DialogStyle.Neutral ? Color.FromArgb("#8D6E63") : Colors.White,
+                BorderColor = style == DialogStyle.Neutral ? Color.FromArgb("#8D6E63") : Colors.Transparent,
+                BorderWidth = style == DialogStyle.Neutral ? 1.5 : 0,
+            };
+            button.Clicked += (_, _) => CloseDialog(index);
+            DialogButtons.Children.Add(button);
+        }
+
+        // A long list (many players) scrolls instead of running off the screen.
+        DialogScroll.MaximumHeightRequest = Math.Max(160, Height * (atBottom ? 0.3 : 0.5));
+        DialogCard.VerticalOptions = atBottom ? LayoutOptions.End : LayoutOptions.Center;
+        DialogOverlay.BackgroundColor = Color.FromArgb(atBottom ? "#33000000" : "#99000000");
+        DialogOverlay.IsVisible = true;
+
+        return await dialog.Task;
+    }
+
+    /// <summary>A yes/no question: true if the first button (<paramref name="accept"/>) was tapped.</summary>
+    private async Task<bool> ConfirmAsync(string title, string message, string accept, string cancel,
+        bool danger = false, bool atBottom = false) =>
+        await ShowDialogAsync(title, message, atBottom,
+            (accept, danger ? DialogStyle.Danger : DialogStyle.Primary), (cancel, DialogStyle.Neutral)) == 0;
+
+    /// <summary>Pick one of <paramref name="options"/>; returns its index, or -1 if cancelled.</summary>
+    private async Task<int> ChooseAsync(string title, string message, IReadOnlyList<string> options, string cancel)
+    {
+        var buttons = options.Select(o => (o, DialogStyle.Primary)).Append((cancel, DialogStyle.Neutral)).ToArray();
+        var picked = await ShowDialogAsync(title, message, atBottom: false, buttons);
+        return picked >= 0 && picked < options.Count ? picked : -1;
+    }
+
     // ---------------- start / quit ----------------
 
     // Pressing Done on the keyboard just dismisses it; "Let's Play!" starts the game.
@@ -68,6 +159,84 @@ public partial class MainPage : ContentPage
     {
         NameEntry.Unfocus();
         await NameEntry.HideSoftInputAsync(CancellationToken.None);
+    }
+
+    /// <summary>Shows everyone who has played and lets the user pick one. Null if cancelled or nobody has played yet.</summary>
+    private async Task<PlayerProgress?> PickPlayerAsync(string title, string cancel)
+    {
+        var players = await _progressStore.GetAllAsync();
+        if (players.Count == 0)
+        {
+            NameHintLabel.Text = "No players yet — type your name to begin 🙂";
+            return null;
+        }
+
+        // Same name twice can't happen (names are unique ignoring case), so the label alone identifies the player.
+        var labels = players.Select(p => $"{p.Name} · {p.ProgressText}").ToArray();
+        var index = await ChooseAsync(title, "", labels, cancel);
+        return index < 0 ? null : players[index];
+    }
+
+    private async void OnChoosePlayerClicked(object? sender, EventArgs e)
+    {
+        if (_starting || _asking) return;
+        _asking = true;
+        try
+        {
+            NameEntry.Unfocus();
+            await NameEntry.HideSoftInputAsync(CancellationToken.None);
+
+            var player = await PickPlayerAsync("Who's playing?", "Cancel");
+            if (player is null) return;
+
+            NameEntry.Text = player.Name;
+            NameHintLabel.Text = "";
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine(ex);
+        }
+        finally
+        {
+            _asking = false;
+        }
+    }
+
+    private async void OnRemovePlayerClicked(object? sender, EventArgs e)
+    {
+        if (_starting || _asking) return;
+        _asking = true;
+        try
+        {
+            NameEntry.Unfocus();
+            await NameEntry.HideSoftInputAsync(CancellationToken.None);
+
+            var player = await PickPlayerAsync("Remove which player?", "Cancel");
+            if (player is null) return;
+
+            var sure = await ConfirmAsync($"Remove {player.Name}?",
+                $"This deletes {player.Name}'s saved progress ({player.ProgressText}) and takes them off the leaderboard. This can't be undone.",
+                "Remove", "Keep", danger: true);
+            if (!sure) return;
+
+            await _progressStore.DeleteAsync(player.Name);
+
+            // Don't leave the removed name sitting in the box, or remembered for next launch.
+            if (string.Equals(PlayerName.Clean(NameEntry.Text), player.Name, StringComparison.OrdinalIgnoreCase))
+                NameEntry.Text = "";
+            if (string.Equals(Preferences.Default.Get(NamePreferenceKey, ""), player.Name, StringComparison.OrdinalIgnoreCase))
+                Preferences.Default.Remove(NamePreferenceKey);
+
+            NameHintLabel.Text = $"{player.Name} was removed.";
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine(ex);
+        }
+        finally
+        {
+            _asking = false;
+        }
     }
 
     private async void OnPlayClicked(object? sender, EventArgs e)
@@ -92,10 +261,20 @@ public partial class MainPage : ContentPage
             await NameEntry.HideSoftInputAsync(CancellationToken.None);
 
             var progress = await _progressStore.GetAsync(name);
-            var startLevel = 1;
-            if (progress is not null && (progress.Completed || progress.CurrentLevel > 1))
+
+            // The maze they were part-way through, with the avatar where they left it. Only usable if it
+            // is for the level they would continue from; anything else (or damage) is ignored.
+            MazeRun? resumed = null;
+            if (progress is not null && !progress.Completed)
             {
-                var choice = await AskHowToStartAsync(name, progress);
+                var saved = await _progressStore.LoadGameAsync(name);
+                if (saved is not null && saved.Level == progress.CurrentLevel) resumed = saved.ToRun();
+            }
+
+            var startLevel = 1;
+            if (progress is not null && (progress.Completed || progress.CurrentLevel > 1 || resumed is not null))
+            {
+                var choice = await AskHowToStartAsync(name, progress, resumed is not null);
                 if (choice == StartChoice.Cancel) return;
 
                 if (choice == StartChoice.Continue)
@@ -107,6 +286,8 @@ public partial class MainPage : ContentPage
                     // Starting over: the best level stays on the leaderboard, only the place to continue from resets.
                     progress = progress with { CurrentLevel = 1 };
                     await _progressStore.SaveAsync(progress);
+                    await _progressStore.ClearGameAsync(name);
+                    resumed = null;
                 }
             }
 
@@ -115,7 +296,7 @@ public partial class MainPage : ContentPage
             Preferences.Default.Set(NamePreferenceKey, name);
 
             _session++;
-            _run = new MazeRun(startLevel);
+            _run = resumed ?? new MazeRun(startLevel);
             _drawable.Run = _run;
             _drawable.Highlight = null;
             _drawable.View.Reset();
@@ -137,21 +318,21 @@ public partial class MainPage : ContentPage
 
     private enum StartChoice { Continue, StartOver, Cancel }
 
-    private async Task<StartChoice> AskHowToStartAsync(string name, PlayerProgress progress)
+    private async Task<StartChoice> AskHowToStartAsync(string name, PlayerProgress progress, bool hasSavedMaze)
     {
         if (progress.Completed)
         {
             var again = "Play again from Level 1";
-            var answer = await DisplayActionSheetAsync($"Welcome back, {name}! You finished every level 🏆", "Cancel", null, again);
-            return answer == again ? StartChoice.StartOver : StartChoice.Cancel;
+            var answer = await ChooseAsync($"Welcome back, {name}!", "You finished every level 🏆", new[] { again }, "Cancel");
+            return answer == 0 ? StartChoice.StartOver : StartChoice.Cancel;
         }
 
-        var continueText = $"Continue from Level {progress.CurrentLevel}";
+        var continueText = hasSavedMaze
+            ? $"Continue Level {progress.CurrentLevel} where I left off"
+            : $"Continue from Level {progress.CurrentLevel}";
         var startOverText = "Start over from Level 1";
-        var picked = await DisplayActionSheetAsync($"Welcome back, {name}!", "Cancel", null, continueText, startOverText);
-        if (picked == continueText) return StartChoice.Continue;
-        if (picked == startOverText) return StartChoice.StartOver;
-        return StartChoice.Cancel;
+        var picked = await ChooseAsync($"Welcome back, {name}!", "", new[] { continueText, startOverText }, "Cancel");
+        return picked switch { 0 => StartChoice.Continue, 1 => StartChoice.StartOver, _ => StartChoice.Cancel };
     }
 
     private void OnQuitAppClicked(object? sender, EventArgs e) => Application.Current?.Quit();
@@ -165,10 +346,8 @@ public partial class MainPage : ContentPage
         bool quit;
         try
         {
-            quit = await DisplayAlertAsync("Quit this game?",
-                run.Level > 1
-                    ? $"Your progress is saved. You can continue from Level {run.Level} next time."
-                    : "Back to the main screen?",
+            quit = await ConfirmAsync("Quit this game?",
+                "Your progress is saved. You can pick up right where you are next time.",
                 "Quit", "Keep playing");
         }
         finally
@@ -351,6 +530,7 @@ public partial class MainPage : ContentPage
 
             SetStatus(run.Attempt.IsDeadEnd ? "💥 Dead end! Swipe back ↩️" : "");
             RefreshHud();
+            await SaveGameAsync(run, session);
         }
         finally
         {
@@ -381,6 +561,7 @@ public partial class MainPage : ContentPage
         SetStatus(allDone ? "🏆 You finished every level!" : $"🎉 Level {run.Level} complete!");
         // Saved now, so quitting during the fireworks loses nothing.
         await SaveProgressAsync(allDone ? run.Level : run.Level + 1, completed: allDone);
+        await _progressStore.ClearGameAsync(_playerName); // solved: nothing left to resume
 
         await PlayFireworksAsync(session);
         if (session != _session) return;
@@ -440,8 +621,9 @@ public partial class MainPage : ContentPage
         bool goBack;
         try
         {
-            goBack = await DisplayAlertAsync("Go back here?",
-                "Move back to the ringed square? The trail after it will be erased.", "Go back", "Stay");
+            // At the foot of the screen, so the ringed square being asked about stays in view.
+            goBack = await ConfirmAsync("Go back here?",
+                "Move back to the ringed square? The trail after it will be erased.", "Go back", "Stay", atBottom: true);
         }
         finally
         {
@@ -454,6 +636,7 @@ public partial class MainPage : ContentPage
             _sounds.Play(Sound.Back);
             SetStatus("");
             _drawable.KeepAvatarInView();
+            await SaveGameAsync(run, _session);
         }
         RefreshHud();
     }
@@ -468,7 +651,7 @@ public partial class MainPage : ContentPage
         bool restart;
         try
         {
-            restart = await DisplayAlertAsync("Start this maze over?", "Your trail will be erased.", "Start over", "Keep going");
+            restart = await ConfirmAsync("Start this maze over?", "Your trail will be erased.", "Start over", "Keep going");
         }
         finally
         {
@@ -480,6 +663,7 @@ public partial class MainPage : ContentPage
             _sounds.Play(Sound.Back);
             SetStatus("");
             _drawable.KeepAvatarInView(); // back at the start square
+            await SaveGameAsync(run, _session);
         }
         RefreshHud();
     }
@@ -521,6 +705,25 @@ public partial class MainPage : ContentPage
         StatusLabel.Text = text;
         await Task.Delay(800);
         if (token == _statusToken) StatusLabel.Text = _baseStatus;
+    }
+
+    /// <summary>
+    /// Remembers the maze and where the avatar is on it, so the player can pick up exactly here later.
+    /// The first save also puts a new player on the leaderboard record at Level 1 (so they can be chosen
+    /// by name next time). A failed save never interrupts play; the previous save simply stays.
+    /// </summary>
+    private async Task SaveGameAsync(MazeRun run, int session)
+    {
+        if (session != _session || _run != run || run.Phase != RunPhase.Playing) return;
+        try
+        {
+            if (_progress is null) await SaveProgressAsync(run.Level, completed: false);
+            await _progressStore.SaveGameAsync(_playerName, SavedGame.From(run));
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine(ex);
+        }
     }
 
     private async Task SaveProgressAsync(int level, bool completed)

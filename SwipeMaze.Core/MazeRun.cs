@@ -31,6 +31,16 @@ public sealed class MazeRun
         BeginLevel(startLevel);
     }
 
+    /// <summary>Picks up a game that was saved part-way: this maze, with the avatar already on its trail.</summary>
+    internal MazeRun(int level, Maze maze, MazeAttempt attempt, Func<int, Maze>? createMaze)
+    {
+        _createMaze = createMaze ?? (l => MazeLevels.Create(l));
+        Level = level;
+        Maze = maze;
+        Attempt = attempt;
+        Phase = RunPhase.Playing;
+    }
+
     public int Level { get; private set; }
     public RunPhase Phase { get; private set; }
     public Maze Maze { get; private set; } = null!;

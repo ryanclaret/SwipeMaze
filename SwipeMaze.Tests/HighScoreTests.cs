@@ -96,6 +96,64 @@ public class ProgressTests : IDisposable
     }
 
     [Fact]
+    public async Task All_players_are_listed_most_recently_active_first_and_not_capped_at_ten()
+    {
+        var repo = new FilePlayerProgressRepository(FilePath);
+        for (var i = 1; i <= 15; i++) await repo.SaveAsync(Player($"p{i}", best: 1, secs: i));
+
+        var all = await repo.GetAllAsync();
+
+        Assert.Equal(15, all.Count);
+        Assert.Equal("p15", all[0].Name);
+        Assert.Equal("p1", all[^1].Name);
+    }
+
+    [Fact]
+    public async Task Listing_everyone_with_no_file_is_empty()
+    {
+        Assert.Empty(await new FilePlayerProgressRepository(FilePath).GetAllAsync());
+    }
+
+    [Fact]
+    public async Task Deleting_a_player_removes_only_them_ignoring_case_and_persists()
+    {
+        var repo = new FilePlayerProgressRepository(FilePath);
+        await repo.SaveAsync(Player("Ana", best: 5));
+        await repo.SaveAsync(Player("Ben", best: 7));
+
+        Assert.True(await repo.DeleteAsync("ANA"));
+
+        var fresh = new FilePlayerProgressRepository(FilePath);
+        Assert.Null(await fresh.GetAsync("Ana"));
+        Assert.Equal(7, (await fresh.GetAsync("Ben"))!.BestLevel);
+        Assert.Equal(new[] { "Ben" }, (await fresh.GetTopAsync()).Select(p => p.Name));
+    }
+
+    [Fact]
+    public async Task Deleting_someone_who_is_not_there_changes_nothing()
+    {
+        var repo = new FilePlayerProgressRepository(FilePath);
+        Assert.False(await repo.DeleteAsync("Nobody"));          // no file at all
+
+        await repo.SaveAsync(Player("Ana", best: 5));
+        Assert.False(await repo.DeleteAsync("Nobody"));          // file exists, name doesn't
+
+        Assert.Equal(5, (await repo.GetAsync("Ana"))!.BestLevel);
+    }
+
+    [Fact]
+    public async Task A_removed_player_can_start_fresh_with_the_same_name()
+    {
+        var repo = new FilePlayerProgressRepository(FilePath);
+        await repo.SaveAsync(Player("Ana", best: 30));
+        await repo.DeleteAsync("Ana");
+
+        Assert.Null(await repo.GetAsync("Ana"));
+        await repo.SaveAsync(Player("Ana", best: 2));
+        Assert.Equal(2, (await repo.GetAsync("Ana"))!.BestLevel);
+    }
+
+    [Fact]
     public async Task A_completed_run_round_trips()
     {
         var repo = new FilePlayerProgressRepository(FilePath);

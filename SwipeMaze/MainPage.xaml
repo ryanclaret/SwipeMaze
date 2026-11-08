@@ -5,6 +5,8 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     BackgroundColor="#FFF8E7">
 
+    <Grid>
+
     <Grid RowDefinitions="Auto,*,Auto" Padding="16,12" RowSpacing="8">
 
         <!-- Level while playing. Every label sets its own TextColor: the default follows the phone's
@@ -37,6 +39,15 @@
                            TextColor="#1B5E20" PlaceholderColor="#9E9E9E" BackgroundColor="Transparent"
                            ReturnType="Done" Completed="OnNameCompleted" />
                 </Border>
+                <!-- Pick someone who has played before, or remove them (after a confirmation) -->
+                <HorizontalStackLayout Spacing="12" HorizontalOptions="Center">
+                    <Button Text="👥 Choose player" FontSize="16" Clicked="OnChoosePlayerClicked"
+                            BackgroundColor="#2E7834" TextColor="White" CornerRadius="14"
+                            HeightRequest="44" WidthRequest="160" Padding="4,0" />
+                    <Button Text="🗑 Remove" FontSize="16" Clicked="OnRemovePlayerClicked"
+                            BackgroundColor="Transparent" TextColor="#C62828" BorderColor="#C62828" BorderWidth="1.5"
+                            CornerRadius="14" HeightRequest="44" WidthRequest="112" Padding="4,0" />
+                </HorizontalStackLayout>
                 <Label x:Name="NameHintLabel" FontSize="16" TextColor="#C62828" HorizontalOptions="Center" />
                 <Button x:Name="PlayButton" Text="Let's Play!" FontSize="28" Clicked="OnPlayClicked"
                         BackgroundColor="#8BC34A" TextColor="White" CornerRadius="20"
@@ -89,6 +100,30 @@
                     BackgroundColor="Transparent" TextColor="#8D6E63" BorderColor="#8D6E63" BorderWidth="1.5"
                     CornerRadius="14" HeightRequest="48" WidthRequest="112" Padding="4,0" />
         </HorizontalStackLayout>
+
+    </Grid>
+
+    <!-- The one dialog used for every question the game asks (confirmations and choices), so they all
+         share the game's fonts and colours instead of the phone's system dialog. The tap handler is there
+         so touches stop at the overlay and never reach the maze underneath. -->
+    <Grid x:Name="DialogOverlay" IsVisible="False" BackgroundColor="#99000000" Padding="24">
+        <Grid.GestureRecognizers>
+            <TapGestureRecognizer Tapped="OnDialogBackdropTapped" />
+        </Grid.GestureRecognizers>
+        <Border x:Name="DialogCard" BackgroundColor="#FFF8E7" Stroke="#1B5E20" StrokeThickness="3"
+                StrokeShape="RoundRectangle 24" Padding="20,18" VerticalOptions="Center"
+                HorizontalOptions="Fill" MaximumWidthRequest="400">
+            <VerticalStackLayout Spacing="14">
+                <Label x:Name="DialogTitle" FontSize="24" FontAttributes="Bold" TextColor="#1B5E20"
+                       HorizontalTextAlignment="Center" />
+                <Label x:Name="DialogMessage" FontSize="17" TextColor="#555555"
+                       HorizontalTextAlignment="Center" />
+                <ScrollView x:Name="DialogScroll">
+                    <VerticalStackLayout x:Name="DialogButtons" Spacing="10" />
+                </ScrollView>
+            </VerticalStackLayout>
+        </Border>
+    </Grid>
 
     </Grid>
 
